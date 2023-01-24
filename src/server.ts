@@ -2,19 +2,24 @@ import express, { Request, Response, NextFunction, Express } from 'express';
 import http from 'http';
 import mongoose from 'mongoose';
 import { config } from './config/config';
-import Logging from './Library/Logging';
+import Logging from './library/Logging';
 
 const router: Express = express();
 
+/** Connect to Mongo */
 mongoose
     .connect(config.mongo.url, { retryWrites: true, w: 'majority' })
     .then(() => {
-        console.log('Connected to DB');
+        Logging.info('Connected to DB');
+        StartServer();
     })
     .catch((error) => {
-        console.log(error);
+        Logging.info('Unable to connect:');
+        Logging.info(error);
     });
 
+
+/** Only Start Server if Mongoose Connects */
 const StartServer = () => {
     /** Log the request */
     router.use((req: Request, res: Response, next: NextFunction) => {
@@ -33,32 +38,31 @@ const StartServer = () => {
 router.use(express.urlencoded({ extended: true }));
 router.use(express.json());
 
+/** Rules of our API */
+router.use((req: Request, res: Response, next: NextFunction) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
 
-  router.use((req: Request, res: Response, next: NextFunction) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method == 'OPTIONS') {
+        res.header('Access-Control-Allow-Methods', 'PUT, POST, PATCH, DELETE, GET');
+        return res.status(200).json({});
+    }
 
-      if (req.method == 'OPTIONS') {
-          res.header('Access-Control-Allow-Methods', 'PUT, POST, PATCH, DELETE, GET');
-          return res.status(200).json({});
-      }
+    next();
+});
 
-      next();
-  });
+/** Healthcheck */
+router.get('/ping', (req: Request, res: Response, next: NextFunction) => res.status(200).json({ message: 'pong' }));
 
-  /** Healthcheck */
-    router.get('/ping', (req: Request, res: Response, next: NextFunction) => res.status(200).json({ message: 'pong' }));
+/** Error handling */
+router.use((req: Request, res: Response, next: NextFunction) => {
+    const error = new Error('Not found');
 
-     router.use((req: Request, res: Response, next: NextFunction) => {
-         const error = new Error('Not found');
+    Logging.error(error);
 
-         Logging.error(error);
+    res.status(404).json({
+        message: error.message
+    });
+});
 
-         res.status(404).json({
-             message: error.message
-         });
-     });
-
- 
-     
-   http.createServer(router).listen(config.server.port, () => Logging.info(`Server is running on port ${config.server.port}`));  
+http.createServer(router).listen(config.server.port, () => Logging.info(`Server is running on port ${config.server.port}`));
