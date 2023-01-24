@@ -1,5 +1,6 @@
 NOTES: 
 
+test
 create .env file 
 
 ```
